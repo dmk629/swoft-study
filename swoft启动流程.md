@@ -295,3 +295,103 @@
 
     $stats = AnnotationRegister::getClassStats();
 
+### 十、 AnnotationRegister.php 
+
+目录：`/vendor/swoft/annotation/src/AnnotationRegister.php`
+
+##### 10.1 load()
+
+注册加载器 - `130行`
+
+	public static function load(array $config = []): void
+    {
+        $resource = new AnnotationResource($config);
+        $resource->load();
+    }
+
+### 十一、 AnnotationResource.php 
+
+目录：`/vendor/swoft/annotation/src/Resource/AnnotationResource.php`
+
+##### 11.1 __construct()
+
+注册加载器 - `127行`
+
+	$this->registerLoader();
+    $this->classLoader = ComposerHelper::getClassLoader();//自动加载
+    $this->includedFiles = get_included_files();
+
+##### 11.2 registerLoader()
+
+注册自动加载 - `420行`
+
+	private function registerLoader(): void
+    {
+        AnnotationRegistry::registerLoader(function (string $class) {
+            if (class_exists($class)) {
+                return true;
+            }
+
+            return false;
+        });
+    }
+
+>AnnotationRegistry类请自行阅读。
+
+##### 11.2 registerLoader()
+
+加载 - `139行`
+
+	public function load(): void
+    {
+		//加载psr4类
+        $prefixDirsPsr4 = $this->classLoader->getPrefixesPsr4();
+
+        foreach ($prefixDirsPsr4 as $ns => $paths) {
+            // Only scan namespaces
+            if ($this->onlyNamespaces && !in_array($ns, $this->onlyNamespaces, true)) {
+                $this->notify('excludeNs', $ns);
+                continue;
+            }
+
+            // It is excluded psr4 prefix
+            if ($this->isExcludedPsr4Prefix($ns)) {
+                AnnotationRegister::registerExcludeNs($ns);
+                $this->notify('excludeNs', $ns);
+                continue;
+            }
+
+            // Find package/component loader class
+            foreach ($paths as $path) {
+                $loaderFile = $this->getAnnotationClassLoaderFile($path);
+                if (!file_exists($loaderFile)) {
+                    $this->notify('noLoaderFile', $this->clearBasePath($path), $loaderFile);
+                    continue;
+                }
+
+                $loaderClass = $this->getAnnotationLoaderClassName($ns);
+                if (!class_exists($loaderClass)) {
+                    $this->notify('noLoaderClass', $loaderClass);
+                    continue;
+                }
+
+                $loaderObject = new $loaderClass();
+                if (!$loaderObject instanceof LoaderInterface) {
+                    $this->notify('invalidLoader', $loaderFile);
+                    continue;
+                }
+
+                $this->notify('findLoaderClass', $this->clearBasePath($loaderFile));
+
+                // If is disable, will skip scan annotation classes
+                if (!isset($this->disabledAutoLoaders[$loaderClass])) {
+                    AnnotationRegister::registerAutoLoaderFile($loaderFile);
+                    $this->notify('addLoaderClass', $loaderClass);
+                    $this->loadAnnotation($loaderObject);
+                }
+
+                // Storage auto loader to register
+                AnnotationRegister::addAutoLoader($ns, $loaderObject);
+            }
+        }
+    }
