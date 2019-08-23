@@ -344,7 +344,7 @@
 
 	public function load(): void
     {
-		//加载psr4类
+		//psr4加载类
         $prefixDirsPsr4 = $this->classLoader->getPrefixesPsr4();
 
         foreach ($prefixDirsPsr4 as $ns => $paths) {
