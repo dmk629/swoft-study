@@ -85,9 +85,6 @@
         $processor->handle();
     }
 
-----
->环境参数加载开始
-
 ### 四、 EnvProcessor.php 
 
 目录：`vendor/swoft/framework/src/Processor/EnvProcessor.php`
@@ -246,10 +243,6 @@
             ->getOrElse($value);
     }
 
->环境参数加载完成。
-
------
-
 ### 八、 ConfigProcessor.php 
 
 目录：`/vendor/swoft/framework/src/Processor/ConfigProcessor.php`
@@ -338,7 +331,7 @@
 
 >AnnotationRegistry类请自行阅读。
 
-##### 11.2 registerLoader()
+##### 11.3 load()
 
 加载 - `139行`
 
@@ -348,33 +341,34 @@
         $prefixDirsPsr4 = $this->classLoader->getPrefixesPsr4();
 
         foreach ($prefixDirsPsr4 as $ns => $paths) {
-            // Only scan namespaces
+            //扫描命名空间
             if ($this->onlyNamespaces && !in_array($ns, $this->onlyNamespaces, true)) {
                 $this->notify('excludeNs', $ns);
                 continue;
             }
 
-            // It is excluded psr4 prefix
+            //排除psr4前缀
             if ($this->isExcludedPsr4Prefix($ns)) {
                 AnnotationRegister::registerExcludeNs($ns);
                 $this->notify('excludeNs', $ns);
                 continue;
             }
 
-            // Find package/component loader class
+            //查找相应加载类
             foreach ($paths as $path) {
+				//加载器文件
                 $loaderFile = $this->getAnnotationClassLoaderFile($path);
                 if (!file_exists($loaderFile)) {
                     $this->notify('noLoaderFile', $this->clearBasePath($path), $loaderFile);
                     continue;
                 }
-
+				//加载器类
                 $loaderClass = $this->getAnnotationLoaderClassName($ns);
                 if (!class_exists($loaderClass)) {
                     $this->notify('noLoaderClass', $loaderClass);
                     continue;
                 }
-
+				//加载器对象
                 $loaderObject = new $loaderClass();
                 if (!$loaderObject instanceof LoaderInterface) {
                     $this->notify('invalidLoader', $loaderFile);
@@ -383,15 +377,69 @@
 
                 $this->notify('findLoaderClass', $this->clearBasePath($loaderFile));
 
-                // If is disable, will skip scan annotation classes
+                //禁用注解
                 if (!isset($this->disabledAutoLoaders[$loaderClass])) {
                     AnnotationRegister::registerAutoLoaderFile($loaderFile);
                     $this->notify('addLoaderClass', $loaderClass);
                     $this->loadAnnotation($loaderObject);
                 }
 
-                // Storage auto loader to register
+                //保存加载器
                 AnnotationRegister::addAutoLoader($ns, $loaderObject);
             }
         }
+    }
+
+##### 11.4 registerLoader()
+
+获取类状态 - `232行`
+
+	public static function getClassStats(): array
+    {
+        return self::$classStats;
+    }
+
+### 十二、 BeanProcessor.php 
+
+目录：`/vendor/swoft/framework/src/Processor/BeanProcessor.php`
+
+##### 12.1 handle()
+
+注册加载器 - `35行`
+
+	public function handle(): bool
+    {
+        if (!$this->application->beforeBean()) {
+            return false;
+        }
+        $handler     = new BeanHandler();
+		//获取初始配置
+        $definitions = $this->getDefinitions();
+		//获取解释器
+        $parsers     = AnnotationRegister::getParsers();
+		//获取注解项
+        $annotations = AnnotationRegister::getAnnotations();
+		//添加初始配置
+        BeanFactory::addDefinitions($definitions);
+		//添加注解项
+        BeanFactory::addAnnotations($annotations);
+		//添加解释器
+        BeanFactory::addParsers($parsers);
+		//设定处理器
+        BeanFactory::setHandler($handler);
+		//初始化Bean
+        BeanFactory::init();
+
+        /* @var Config $config*/
+        $config = BeanFactory::getBean('config');
+
+        CLog::info('config path=%s', $config->getPath());
+        CLog::info('config env=%s', $config->getEnv());
+
+		//获取Bean类型
+        $stats = BeanFactory::getStats();
+
+        CLog::info('Bean is initialized(%s)', SwoftHelper::formatStats($stats));
+
+        return $this->application->afterBean();
     }
