@@ -405,7 +405,7 @@
 
 ##### 12.1 handle()
 
-注册加载器 - `35行`
+处理 - `35行`
 
 	public function handle(): bool
     {
@@ -413,7 +413,7 @@
             return false;
         }
         $handler     = new BeanHandler();
-		//获取初始配置
+		//定义Bean
         $definitions = $this->getDefinitions();
 		//获取解释器
         $parsers     = AnnotationRegister::getParsers();
@@ -443,3 +443,56 @@
 
         return $this->application->afterBean();
     }
+
+
+##### 12.2 getDefinitions()
+
+获取定义Beans - `70行`
+
+	private function getDefinitions(): array
+    {
+        //核心beans
+        $definitions = [];
+        $autoLoaders = AnnotationRegister::getAutoLoaders();
+
+        //获取禁用加载器
+        $disabledLoaders = $this->application->getDisabledAutoLoaders();
+
+        foreach ($autoLoaders as $autoLoader) {
+            if (!$autoLoader instanceof DefinitionInterface) {
+                continue;
+            }
+
+            $loaderClass = get_class($autoLoader);
+
+            //用户禁用组件
+            if (isset($disabledLoaders[$loaderClass])) {
+                CLog::info('Auto loader(%s) is <cyan>disabled</cyan>, skip handle it', $loaderClass);
+                continue;
+            }
+
+            //不可用组件
+            if ($autoLoader instanceof ComponentInterface && !$autoLoader->isEnable()) {
+                continue;
+            }
+
+            $definitions = ArrayHelper::merge($definitions, $autoLoader->beans());
+        }
+
+        //定义Bean
+        $beanFile = $this->application->getBeanFile();
+        $beanFile = alias($beanFile);
+
+        if (!file_exists($beanFile)) {
+            throw new InvalidArgumentException(
+                sprintf('The bean config file of %s is not exist!', $beanFile)
+            );
+        }
+
+		//引入文件
+        $beanDefinitions = require $beanFile;
+        $definitions     = ArrayHelper::merge($definitions, $beanDefinitions);
+
+        return $definitions;
+    }
+
